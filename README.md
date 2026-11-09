@@ -28,7 +28,7 @@ macOS may ask the selected browser to access saved passkeys the first time. Choo
 
 ## Privacy
 
-The extension needs access to supported websites to detect login fields and autofill. Its native messaging permission lets it connect to the installed helper automatically. macOS separately controls whether passkeys are available to the browser. Passwords are handled locally through Apple’s helper; this app does not read Keychain databases or maintain a password vault. Decrypted passwords are cached in memory for up to two minutes. The extension does not request browser history, Downloads, desktop, documents, or file access.
+The extension needs access to supported websites to detect login fields and autofill. Its native messaging permission lets it connect to the installed helper automatically. macOS separately controls whether passkeys are available to the browser. Passwords are handled locally through Apple’s helper; this app does not read Keychain databases or maintain a password vault. Decrypted passwords are cached in memory for up to two minutes.
 
 ## Known Issues
 
