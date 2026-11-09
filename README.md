@@ -17,17 +17,23 @@ Passkey support is experimental and may not work on every site.
 3. In Chrome or Arc, open the extensions page, turn on Developer mode, select **Load unpacked**, and choose this repository’s root folder—the folder containing `manifest.json`.
 4. Allow the extension's native messaging permission if the browser asks during installation or reload. The extension connects automatically; there is no Connect button. Allow website access when asked so autofill can work.
 
-macOS may separately ask once before allowing access to saved passkeys. Choose **Allow** to use Apple Passwords passkeys.
+macOS may ask the selected browser to access saved passkeys the first time. Choose **Allow** to use Apple Passwords passkeys; this permission is separate from the helper's.
 
 ## Use
 
 - Choose an account from the extension popup or a field suggestion to fill a login.
 - New or changed passwords can be saved to Apple Passwords after form submission.
-- Explicit passkey sign-in and registration use the helper by default. Conditional passkey suggestions stay in the browser showing the site. Change this in the extension settings.
+- Passkey requests, including requests made when a page loads, use the helper by default. Turn off **Use helper for passkey requests** to use the browser showing the site.
+- Turn on **Hide passkey suggestions** to suppress conditional passkey requests.
 
 ## Privacy
 
 The extension needs access to supported websites to detect login fields and autofill. Its native messaging permission lets it connect to the installed helper automatically. macOS separately controls whether passkeys are available to the browser. Passwords are handled locally through Apple’s helper; this app does not read Keychain databases or maintain a password vault. Decrypted passwords are cached in memory for up to two minutes. The extension does not request browser history, Downloads, desktop, documents, or file access.
+
+## Known Issues
+
+- When using Arc, the helper may ask for access to certain directories.
+- Warning that the helper is trying to modify another application.
 
 ## Troubleshooting and removal
 

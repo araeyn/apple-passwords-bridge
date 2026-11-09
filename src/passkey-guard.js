@@ -1,12 +1,11 @@
-// Route explicit WebAuthn ceremonies through the companion helper when it is
-// available. Conditional passkey requests stay with the browser so its native
-// autofill UI remains in control; the existing toggle only hides those requests.
+// Route WebAuthn requests through the companion helper when enabled, including
+// requests made during page load. The setting can still suppress conditional
+// passkey requests instead of opening the helper browser.
 (() => {
   const CHANNEL = "openpasswords:passkeys:v1";
   const BINARY_TAG = "__openPasswordsBufferSource";
   const TIMEOUT_NAME = "NotAllowedError";
   const HELPER_REQUEST_TIMEOUT_MS = 310_000;
-  const USER_INTENT_WINDOW_MS = 60_000;
   const pending = new Map();
   const credentials = navigator.credentials;
   if (!credentials || typeof credentials.get !== "function" || typeof credentials.create !== "function") return;
@@ -21,22 +20,6 @@
       : null;
   let hideConditionalPasskeys = false;
   let usePasskeyHelper = true;
-  let lastTrustedInteractionAt = 0;
-
-  function recordTrustedInteraction(event) {
-    if (event.isTrusted) lastTrustedInteractionAt = Date.now();
-  }
-
-  for (const type of ["pointerdown", "keydown", "touchstart", "click", "submit"]) {
-    document.addEventListener(type, recordTrustedInteraction, true);
-  }
-
-  function hasRecentUserIntent() {
-    if (navigator.userActivation?.isActive) return true;
-    const age = Date.now() - lastTrustedInteractionAt;
-    return age >= 0 && age <= USER_INTENT_WINDOW_MS;
-  }
-
   addEventListener("openpasswords:hide-passkeys-on", () => (hideConditionalPasskeys = true));
   addEventListener("openpasswords:hide-passkeys-off", () => (hideConditionalPasskeys = false));
   addEventListener("openpasswords:helper-passkeys-on", () => (usePasskeyHelper = true));
@@ -357,12 +340,8 @@
       if (!publicKey) return original(options);
 
       const conditional = kind === "get" && options.mediation === "conditional";
-      if (conditional) return hideConditionalPasskeys ? hideConditionalRequest(options) : original(options);
+      if (conditional && hideConditionalPasskeys) return hideConditionalRequest(options);
       if (!usePasskeyHelper) return original(options);
-      // Some sites fetch a challenge after the click, then call WebAuthn once
-      // transient activation has expired. Accept a recent trusted interaction
-      // while still keeping page-load scripts on the browser's native path.
-      if (!hasRecentUserIntent()) return original(options);
       return requestHelper(kind, options);
     };
   }

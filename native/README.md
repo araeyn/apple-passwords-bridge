@@ -10,7 +10,7 @@ From the repository root, run:
 ./native/install-password-helper.sh
 ```
 
-This builds **Open Passwords Helper.app**, installs it in `~/Applications`, and registers the native hosts for Chrome and Arc. Open the helper, choose a browser, then select **Check selected browser**. Load the extension from the repository root as described in the [main README](../README.md), and allow its native messaging permission if prompted. The extension connects automatically. macOS asks separately for passkey access the first time a passkey is used.
+This builds **Open Passwords Helper.app**, installs it in `~/Applications`, and registers the native hosts for Chrome and Arc. Open the helper, choose a browser, then select **Check selected browser**. Load the extension from the repository root as described in the [main README](../README.md), and allow its native messaging permission if prompted. The extension connects automatically. macOS may separately ask the selected browser to access saved passkeys the first time one is used.
 
 ## Build without installing
 
@@ -24,7 +24,7 @@ From this directory, run:
 
 - If the extension cannot connect, rerun the installer and reload the extension.
 - If the browser check fails, choose another signed Chromium browser with Apple’s public-key credential entitlement.
-- Explicit passkey requests use a temporary browser profile. Conditional passkey suggestions remain in the original browser.
+- Passkey requests use a temporary browser profile, including requests initiated automatically when a site loads.
 
 ## Remove
 

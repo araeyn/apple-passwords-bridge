@@ -6,28 +6,12 @@
   globalThis.__openPasswordsPasskeyBridgeV1 = true;
 
   const PASSKEY_CHANNEL = "openpasswords:passkeys:v1";
-  const USER_INTENT_WINDOW_MS = 60_000;
   const pushSetting = (name, on) => dispatchEvent(new Event(`openpasswords:${name}-${on ? "on" : "off"}`));
   const settings = { hidePasskeys: false, usePasskeyHelper: true };
-  let lastTrustedInteractionAt = 0;
   const publishSettings = () => {
     pushSetting("hide-passkeys", settings.hidePasskeys);
     pushSetting("helper-passkeys", settings.usePasskeyHelper);
   };
-
-  function recordTrustedInteraction(event) {
-    if (event.isTrusted) lastTrustedInteractionAt = Date.now();
-  }
-
-  for (const type of ["pointerdown", "keydown", "touchstart", "click", "submit"]) {
-    document.addEventListener(type, recordTrustedInteraction, true);
-  }
-
-  function hasRecentUserIntent() {
-    if (navigator.userActivation?.isActive) return true;
-    const age = Date.now() - lastTrustedInteractionAt;
-    return age >= 0 && age <= USER_INTENT_WINDOW_MS;
-  }
 
   // The MAIN-world shim asks after installing its listeners so it cannot miss
   // the initial setting if storage responds before the other content script.
@@ -88,14 +72,6 @@
       return;
     }
     if (activeRequests.has(id) || cancelled.has(id)) return;
-    // Verify a real recent interaction here as well as in the page-world shim:
-    // sites often request a challenge asynchronously after the user's click.
-    if (!hasRecentUserIntent()) {
-      sendUnavailable(id, "user-activation-required");
-      return;
-    }
-    if (cancelled.has(id)) return;
-
     activeRequests.add(id);
     try {
       chrome.runtime.sendMessage({ type: "passkeyRequest", requestId: id, kind, origin, options }, (reply) => {
