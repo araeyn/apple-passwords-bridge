@@ -1,6 +1,6 @@
 # Open Passwords
 
-Use Apple Passwords for website logins and passkeys in Chrome or Arc on macOS. The extension connects to Apple’s native Passwords service through the Open Passwords Helper app.
+Use Apple Passwords for website logins and passkeys in any browser on macOS. The extension connects to Apple’s native Passwords service through the Open Passwords Helper app.
 
 Passkey support is experimental and may not work on every site.
 
