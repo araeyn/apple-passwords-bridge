@@ -20,8 +20,8 @@
         <p class="msg">
           Couldn't reach the Passwords helper. Run
           native/install-password-helper.sh from this extension's folder, then
-          reload the extension. Chrome and Edge can also use Apple's registered
-          helper directly.
+          reload the extension. It will connect automatically. Chrome and Edge
+          can also use Apple's registered helper directly.
         </p>
       </section>
 
@@ -38,9 +38,7 @@
 
       <!-- Connecting -->
       <section id="view-connecting" hidden>
-        <p class="msg">Connect to the Passwords helper. The browser will ask before enabling native helper access.</p>
-        <button id="connect-helper" class="primary">Connect to Passwords</button>
-        <p id="connect-error" class="error" hidden></p>
+        <p class="msg">Connecting to the Passwords helper automatically. If this stays here, reopen the popup to retry.</p>
       </section>
 
       <!-- Unlocked: logins for current site -->

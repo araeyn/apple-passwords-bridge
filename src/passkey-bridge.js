@@ -6,16 +6,42 @@
   globalThis.__openPasswordsPasskeyBridgeV1 = true;
 
   const PASSKEY_CHANNEL = "openpasswords:passkeys:v1";
+  const USER_INTENT_WINDOW_MS = 60_000;
   const pushSetting = (name, on) => dispatchEvent(new Event(`openpasswords:${name}-${on ? "on" : "off"}`));
+  const settings = { hidePasskeys: false, usePasskeyHelper: true };
+  let lastTrustedInteractionAt = 0;
+  const publishSettings = () => {
+    pushSetting("hide-passkeys", settings.hidePasskeys);
+    pushSetting("helper-passkeys", settings.usePasskeyHelper);
+  };
 
+  function recordTrustedInteraction(event) {
+    if (event.isTrusted) lastTrustedInteractionAt = Date.now();
+  }
+
+  for (const type of ["pointerdown", "keydown", "touchstart", "click", "submit"]) {
+    document.addEventListener(type, recordTrustedInteraction, true);
+  }
+
+  function hasRecentUserIntent() {
+    if (navigator.userActivation?.isActive) return true;
+    const age = Date.now() - lastTrustedInteractionAt;
+    return age >= 0 && age <= USER_INTENT_WINDOW_MS;
+  }
+
+  // The MAIN-world shim asks after installing its listeners so it cannot miss
+  // the initial setting if storage responds before the other content script.
+  addEventListener("openpasswords:passkey-settings-request", publishSettings);
   chrome.storage?.local?.get({ hidePasskeys: false, usePasskeyHelper: true }, (data) => {
-    pushSetting("hide-passkeys", !!data.hidePasskeys);
-    pushSetting("helper-passkeys", !!data.usePasskeyHelper);
+    settings.hidePasskeys = !!data.hidePasskeys;
+    settings.usePasskeyHelper = !!data.usePasskeyHelper;
+    publishSettings();
   });
   chrome.storage?.onChanged?.addListener((changes, area) => {
     if (area !== "local") return;
-    if (changes.hidePasskeys) pushSetting("hide-passkeys", !!changes.hidePasskeys.newValue);
-    if (changes.usePasskeyHelper) pushSetting("helper-passkeys", !!changes.usePasskeyHelper.newValue);
+    if (changes.hidePasskeys) settings.hidePasskeys = !!changes.hidePasskeys.newValue;
+    if (changes.usePasskeyHelper) settings.usePasskeyHelper = !!changes.usePasskeyHelper.newValue;
+    if (changes.hidePasskeys || changes.usePasskeyHelper) publishSettings();
   });
 
   const cancelled = new Set();
@@ -62,10 +88,9 @@
       return;
     }
     if (activeRequests.has(id) || cancelled.has(id)) return;
-    // The page can post to this isolated-world bridge directly. Require the
-    // same active gesture checked by the page-world shim before launching a
-    // privileged browser window.
-    if (!navigator.userActivation?.isActive) {
+    // Verify a real recent interaction here as well as in the page-world shim:
+    // sites often request a challenge asynchronously after the user's click.
+    if (!hasRecentUserIntent()) {
       sendUnavailable(id, "user-activation-required");
       return;
     }

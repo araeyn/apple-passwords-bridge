@@ -218,6 +218,7 @@ const MAINTENANCE_ALARM = "open-passwords-maintenance";
 const PASSKEY_DEFAULT_MIGRATION = "passkeyHelperDefaultOnV050";
 chrome.runtime.onInstalled.addListener(() => {
   chrome.alarms.clear(KEEPALIVE_ALARM);
+  void ensureConnected();
   chrome.storage.local.get({ [PASSKEY_DEFAULT_MIGRATION]: false }, (settings) => {
     if (settings[PASSKEY_DEFAULT_MIGRATION]) return;
     chrome.storage.local.set({
@@ -228,6 +229,9 @@ chrome.runtime.onInstalled.addListener(() => {
 });
 chrome.alarms.onAlarm.addListener((alarm) => {
   if (alarm.name === MAINTENANCE_ALARM) runMaintenance();
+});
+chrome.runtime.onStartup.addListener(() => {
+  void ensureConnected();
 });
 
 const DEFAULT_HELPER_IDLE_MINUTES = 10;
@@ -321,23 +325,31 @@ function noteHelperActivity() {
   scheduleMaintenance();
 }
 
-async function ensureConnected() {
-  const allowed = await chrome.permissions.contains({ permissions: ["nativeMessaging"] }).catch(() => false);
-  if (!allowed) {
-    lastHelperActivityAt = 0;
-    client.disconnect();
-    scheduleMaintenance();
-    return false;
-  }
-  noteHelperActivity();
-  if (client.state === State.Disconnected || client.state === State.NoHelper) {
-    try {
-      await client.connect();
-    } catch (e) {
-      // surfaced via state change (NoHelper / Disconnected)
+let connectionAttempt = null;
+function ensureConnected() {
+  if (connectionAttempt) return connectionAttempt;
+  connectionAttempt = (async () => {
+    const allowed = await chrome.permissions.contains({ permissions: ["nativeMessaging"] }).catch(() => false);
+    if (!allowed) {
+      lastHelperActivityAt = 0;
+      client.disconnect();
+      scheduleMaintenance();
+      return false;
     }
-  }
-  scheduleMaintenance();
+    noteHelperActivity();
+    if (client.state === State.Disconnected || client.state === State.NoHelper) {
+      try {
+        await client.connect();
+      } catch (e) {
+        // surfaced via state change (NoHelper / Disconnected)
+      }
+    }
+    scheduleMaintenance();
+    return client.state !== State.NoHelper && client.state !== State.Disconnected;
+  })().finally(() => {
+    connectionAttempt = null;
+  });
+  return connectionAttempt;
 }
 
 // only the extension's own popup may drive privileged actions (content messages carry sender.tab, the popup never does)
@@ -516,7 +528,7 @@ async function startPasskeyRequest(msg, sender, sendResponse) {
       port.postMessage({ type: "cancel", requestId });
     } catch (_) {}
     finish({ error: { name: "NotAllowedError", message: "The passkey request timed out." } });
-  }, 4 * 60_000);
+  }, 6 * 60_000);
 
   try {
     port.postMessage({ type: "request", requestId, kind: msg.kind, origin: pageOrigin, options: msg.options });

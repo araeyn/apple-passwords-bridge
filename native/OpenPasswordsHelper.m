@@ -1025,7 +1025,7 @@ static void setStatusLabel(NSTextField *label, NSString *text, BOOL error) {
     label.textColor = error ? NSColor.systemRedColor : NSColor.secondaryLabelColor;
 }
 
-@interface OpenPasswordsAppDelegate : NSObject <NSApplicationDelegate>
+@interface OpenPasswordsAppDelegate : NSObject <NSApplicationDelegate, NSWindowDelegate>
 @property(nonatomic, strong) NSWindow *window;
 @property(nonatomic, strong) NSTextField *status;
 @property(nonatomic, strong) NSPopUpButton *browserPicker;
@@ -1082,6 +1082,14 @@ static void setStatusLabel(NSTextField *label, NSString *text, BOOL error) {
     [self.window performClose:sender];
 }
 
+- (BOOL)windowShouldClose:(NSWindow *)sender {
+    if (appVisibilityMode() == OPAppVisibilityMenuBarOnly) {
+        [sender orderOut:nil];
+        return NO;
+    }
+    return YES;
+}
+
 - (void)updateStatusItem:(BOOL)enabled {
     if (!enabled) {
         if (self.statusItem) {
@@ -1132,6 +1140,8 @@ static void setStatusLabel(NSTextField *label, NSString *text, BOOL error) {
 
     NSRect frame = NSMakeRect(0, 0, 500, 350);
     self.window = [[NSWindow alloc] initWithContentRect:frame styleMask:(NSWindowStyleMaskTitled | NSWindowStyleMaskClosable) backing:NSBackingStoreBuffered defer:NO];
+    self.window.releasedWhenClosed = NO;
+    self.window.delegate = self;
     self.window.title = @"Open Passwords Helper";
     [self.window center];
 

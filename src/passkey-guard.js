@@ -5,6 +5,8 @@
   const CHANNEL = "openpasswords:passkeys:v1";
   const BINARY_TAG = "__openPasswordsBufferSource";
   const TIMEOUT_NAME = "NotAllowedError";
+  const HELPER_REQUEST_TIMEOUT_MS = 310_000;
+  const USER_INTENT_WINDOW_MS = 60_000;
   const pending = new Map();
   const credentials = navigator.credentials;
   if (!credentials || typeof credentials.get !== "function" || typeof credentials.create !== "function") return;
@@ -18,12 +20,28 @@
       ? window.PublicKeyCredential.isConditionalMediationAvailable.bind(window.PublicKeyCredential)
       : null;
   let hideConditionalPasskeys = false;
-  let usePasskeyHelper = false;
+  let usePasskeyHelper = true;
+  let lastTrustedInteractionAt = 0;
+
+  function recordTrustedInteraction(event) {
+    if (event.isTrusted) lastTrustedInteractionAt = Date.now();
+  }
+
+  for (const type of ["pointerdown", "keydown", "touchstart", "click", "submit"]) {
+    document.addEventListener(type, recordTrustedInteraction, true);
+  }
+
+  function hasRecentUserIntent() {
+    if (navigator.userActivation?.isActive) return true;
+    const age = Date.now() - lastTrustedInteractionAt;
+    return age >= 0 && age <= USER_INTENT_WINDOW_MS;
+  }
 
   addEventListener("openpasswords:hide-passkeys-on", () => (hideConditionalPasskeys = true));
   addEventListener("openpasswords:hide-passkeys-off", () => (hideConditionalPasskeys = false));
   addEventListener("openpasswords:helper-passkeys-on", () => (usePasskeyHelper = true));
   addEventListener("openpasswords:helper-passkeys-off", () => (usePasskeyHelper = false));
+  dispatchEvent(new Event("openpasswords:passkey-settings-request"));
 
   if (nativeConditionalAvailable) {
     try {
@@ -104,14 +122,6 @@
     return result;
   }
 
-  function timeoutFor(options) {
-    const requested = Number(options?.publicKey?.timeout);
-    if (!Number.isFinite(requested) || requested <= 0) return 60_000;
-    // The native broker caps a complete browser startup and WebAuthn ceremony
-    // at two minutes, so don't leave the page promise pending longer than it.
-    return Math.max(1_000, Math.min(120_000, requested));
-  }
-
   function newRequestID() {
     if (typeof crypto.randomUUID === "function") return crypto.randomUUID();
     const bytes = new Uint8Array(16);
@@ -162,27 +172,35 @@
         callback(value);
       };
       const abortHandler = () => finish(reject, makeError("AbortError", "The operation was aborted."), true);
+      const fallbackToNative = (reason) => {
+        console.warn("[Open Passwords] Passkey helper unavailable; using this browser's passkey flow.", reason);
+        try {
+          finish(resolve, (kind === "get" ? nativeGet : nativeCreate)(options));
+        } catch (error) {
+          finish(reject, error);
+        }
+      };
       const onResponse = (event) => {
         if (event.source !== window || event.origin !== origin) return;
         const message = event.data;
         if (!message || message.channel !== CHANNEL || message.type !== "response" || message.id !== id) return;
         const response = message.response;
         if (response?.reason === "native-messaging-permission-required") {
-          // Until the user connects the helper, let the selected browser use
-          // its normal Apple passkey flow instead of failing the site request.
-          try {
-            finish(resolve, (kind === "get" ? nativeGet : nativeCreate)(options));
-          } catch (error) {
-            finish(reject, error);
-          }
+          // Let the selected browser make its own activation decision if the
+          // helper has not been connected.
+          fallbackToNative(response.reason);
           return;
         }
         if (response?.unavailable === true || response?.available === false || response?.error?.unavailable === true) {
-          finish(reject, helperUnavailable());
+          fallbackToNative(response.reason || "helper-unavailable");
           return;
         }
         if (response?.error) {
           const error = typeof response.error === "string" ? { message: response.error } : response.error;
+          if (error.name === "NotSupportedError") {
+            fallbackToNative(error.message || "helper-not-supported");
+            return;
+          }
           finish(reject, makeError(error.name || "NotAllowedError", error.message || "The passkey request failed."));
           return;
         }
@@ -196,7 +214,9 @@
       pending.set(id, { abort: abortHandler });
       addEventListener("message", onResponse);
       if (signal) signal.addEventListener("abort", abortHandler, { once: true });
-      timer = setTimeout(() => finish(reject, makeError(TIMEOUT_NAME, "The passkey request timed out."), true), timeoutFor(options));
+      // Include cold browser startup time. The relying-party timeout applies to
+      // its WebAuthn ceremony, not to starting this separate helper browser.
+      timer = setTimeout(() => finish(reject, makeError(TIMEOUT_NAME, "The passkey request timed out."), true), HELPER_REQUEST_TIMEOUT_MS);
       try {
         window.postMessage({ channel: CHANNEL, type: "request", id, kind, origin, options: serializedOptions }, origin);
       } catch (_) {
@@ -339,9 +359,10 @@
       const conditional = kind === "get" && options.mediation === "conditional";
       if (conditional) return hideConditionalPasskeys ? hideConditionalRequest(options) : original(options);
       if (!usePasskeyHelper) return original(options);
-      // Do not let a page script open the privileged broker without an active
-      // user gesture; in that case let this browser enforce its normal policy.
-      if (!navigator.userActivation?.isActive) return original(options);
+      // Some sites fetch a challenge after the click, then call WebAuthn once
+      // transient activation has expired. Accept a recent trusted interaction
+      // while still keeping page-load scripts on the browser's native path.
+      if (!hasRecentUserIntent()) return original(options);
       return requestHelper(kind, options);
     };
   }

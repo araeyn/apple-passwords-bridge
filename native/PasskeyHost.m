@@ -1,6 +1,7 @@
 #import "PasskeyHost.h"
 
 #import <AppKit/AppKit.h>
+#import <CoreGraphics/CoreGraphics.h>
 #import <arpa/inet.h>
 #import <errno.h>
 #import <fcntl.h>
@@ -25,11 +26,13 @@ static const NSUInteger kMaximumRequestBytes = 64 * 1024;
 // BufferSource markers expand to base64url strings before the 64KB parsed-option cap.
 static const NSUInteger kMaximumIncomingRequestBytes = 128 * 1024;
 static const NSUInteger kMaximumCDPMessageBytes = 2 * 1024 * 1024;
-static const NSTimeInterval kMaximumOperationSeconds = 120.0;
-static const NSTimeInterval kBrowserStartupSeconds = 20.0;
-static const NSTimeInterval kOriginLoadSeconds = 20.0;
-static const NSTimeInterval kDefaultWebAuthnTimeoutMS = 60000.0;
-static const NSTimeInterval kMaximumWebAuthnTimeoutMS = 120000.0;
+static const NSInteger kPasskeyWindowWidth = 480;
+static const NSInteger kPasskeyWindowHeight = 320;
+static const NSTimeInterval kMaximumOperationSeconds = 300.0;
+static const NSTimeInterval kBrowserStartupSeconds = 30.0;
+static const NSTimeInterval kOriginLoadSeconds = 30.0;
+static const NSTimeInterval kDefaultWebAuthnTimeoutMS = 300000.0;
+static const NSTimeInterval kMaximumWebAuthnTimeoutMS = 300000.0;
 static const char kTemporaryDirectoryTemplate[] = "/tmp/open-passwords-passkey.XXXXXX";
 
 @interface OPPipeConnection : NSObject
@@ -135,6 +138,19 @@ static BOOL OPCreatePipe(int pipeFDs[2]) {
     return YES;
 }
 
+static NSDictionary *OPCenteredPasskeyWindowBounds(void) {
+    CGRect displayBounds = CGDisplayBounds(CGMainDisplayID());
+    NSInteger left = (NSInteger)llround(CGRectGetMidX(displayBounds) - kPasskeyWindowWidth / 2.0);
+    NSInteger top = (NSInteger)llround(CGRectGetMidY(displayBounds) - kPasskeyWindowHeight / 2.0);
+    return @{
+        @"left" : @(left),
+        @"top" : @(top),
+        @"width" : @(kPasskeyWindowWidth),
+        @"height" : @(kPasskeyWindowHeight),
+        @"windowState" : @"normal",
+    };
+}
+
 static BOOL OPSpawnBrowser(OPPipeConnection *connection, NSDictionary *browser, NSString *profilePath, NSError **errorOut) {
     NSString *executable = browser[@"executablePath"];
     if (![executable isKindOfClass:NSString.class] || !executable.isAbsolutePath || ![NSFileManager.defaultManager isExecutableFileAtPath:executable]) {
@@ -155,6 +171,7 @@ static BOOL OPSpawnBrowser(OPPipeConnection *connection, NSDictionary *browser, 
     }
 
     NSString *userData = [@"--user-data-dir=" stringByAppendingString:profilePath];
+    NSString *windowSizeArgument = [NSString stringWithFormat:@"--window-size=%ld,%ld", (long)kPasskeyWindowWidth, (long)kPasskeyWindowHeight];
     NSArray<NSString *> *arguments = @[
         executable,
         userData,
@@ -164,7 +181,7 @@ static BOOL OPSpawnBrowser(OPPipeConnection *connection, NSDictionary *browser, 
         @"--disable-sync",
         @"--disable-extensions",
         @"--disable-background-networking",
-        @"--window-size=480,320",
+        windowSizeArgument,
         @"--app=about:blank",
     ];
     char **argv = calloc(arguments.count + 1, sizeof(char *));
@@ -452,6 +469,7 @@ static BOOL OPActivateAndWaitForFocus(OPPipeConnection *connection, NSError **er
     }
     [application activateWithOptions:(NSApplicationActivateAllWindows | NSApplicationActivateIgnoringOtherApps)];
     OPSendCommand(connection, @"Target.activateTarget", @{ @"targetId" : connection.targetID }, nil, 2.0, nil);
+    OPSendCommand(connection, @"Page.bringToFront", @{}, connection.sessionID, 2.0, nil);
 
     NSTimeInterval deadline = MIN(connection.deadline, OPMonotonicTime() + 5.0);
     while (OPMonotonicTime() < deadline) {
@@ -690,8 +708,8 @@ static NSDictionary *OPRunCDP(OPPipeConnection *connection, NSDictionary *browse
         NSDictionary *created = OPSendCommand(connection, @"Target.createTarget", @{
             @"url" : @"about:blank",
             @"newWindow" : @YES,
-            @"width" : @480,
-            @"height" : @320,
+            @"width" : @(kPasskeyWindowWidth),
+            @"height" : @(kPasskeyWindowHeight),
         }, nil, kBrowserStartupSeconds, errorOut);
         target = created[@"result"];
     }
@@ -712,7 +730,7 @@ static NSDictionary *OPRunCDP(OPPipeConnection *connection, NSDictionary *browse
     OPSendCommand(connection, @"Target.activateTarget", @{ @"targetId" : targetID }, nil, 5.0, nil);
     NSDictionary *window = OPSendCommand(connection, @"Browser.getWindowForTarget", @{ @"targetId" : targetID }, nil, 5.0, nil)[@"result"];
     NSNumber *windowID = window[@"windowId"];
-    if (windowID) OPSendCommand(connection, @"Browser.setWindowBounds", @{ @"windowId" : windowID, @"bounds" : @{ @"width" : @480, @"height" : @320, @"windowState" : @"normal" } }, nil, 5.0, nil);
+    if (windowID) OPSendCommand(connection, @"Browser.setWindowBounds", @{ @"windowId" : windowID, @"bounds" : OPCenteredPasskeyWindowBounds() }, nil, 5.0, nil);
     if (!OPSendCommand(connection, @"Page.enable", @{}, sessionID, 5.0, errorOut)) return nil;
     if (!OPSendCommand(connection, @"Runtime.enable", @{}, sessionID, 5.0, errorOut)) return nil;
 

@@ -8,7 +8,7 @@ RESOURCES="$APP/Contents/Resources"
 mkdir -p "$APP/Contents/MacOS" "$RESOURCES"
 
 /usr/bin/clang -fobjc-arc -O2 -Wall -Wextra -mmacosx-version-min=13.0 \
-  -framework AppKit -framework Security \
+  -framework AppKit -framework CoreGraphics -framework Security \
   "$NATIVE_DIR/OpenPasswordsHelper.m" \
   "$NATIVE_DIR/PasskeyHost.m" \
   -o "$APP/Contents/MacOS/OpenPasswordsHelper"

@@ -10,7 +10,7 @@ From the repository root, run:
 ./native/install-password-helper.sh
 ```
 
-This builds **Open Passwords Helper.app**, installs it in `~/Applications`, and registers the native hosts for Chrome and Arc. Open the helper, choose a browser, then select **Check selected browser**. Load the extension from the repository root as described in the [main README](../README.md).
+This builds **Open Passwords Helper.app**, installs it in `~/Applications`, and registers the native hosts for Chrome and Arc. Open the helper, choose a browser, then select **Check selected browser**. Load the extension from the repository root as described in the [main README](../README.md), and allow its native messaging permission if prompted. The extension connects automatically. macOS asks separately for passkey access the first time a passkey is used.
 
 ## Build without installing
 

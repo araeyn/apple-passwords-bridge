@@ -75,45 +75,6 @@ async function render(state) {
   show("connecting");
 }
 
-document.getElementById("connect-helper").addEventListener("click", async (event) => {
-  const button = event.currentTarget;
-  const error = document.getElementById("connect-error");
-  button.disabled = true;
-  error.hidden = true;
-  try {
-    // Request this optional API permission in the button gesture. It is not
-    // needed until the user chooses to connect to a native Passwords host.
-    const permissionRequest = chrome.permissions.request({ permissions: ["nativeMessaging"] });
-    const granted = await permissionRequest;
-    if (!granted) {
-      error.textContent = "Native helper access was not granted. Choose Connect again to retry.";
-      error.hidden = false;
-      return;
-    }
-
-    const connected = await send({ type: "connect" });
-    let state = connected?.state ?? "disconnected";
-    if (state === "needs_pin") {
-      const challenge = await send({ type: "requestChallenge" });
-      if (challenge?.ok) state = challenge.state;
-      else {
-        error.textContent = challenge?.error ?? "Couldn't request a verification code.";
-        error.hidden = false;
-      }
-    }
-    if (connected?.ok === false) {
-      error.textContent = connected.error || "Couldn't connect to the Passwords helper.";
-      error.hidden = false;
-    }
-    await render(state);
-  } catch (e) {
-    error.textContent = e?.message || "Couldn't connect to the Passwords helper.";
-    error.hidden = false;
-  } finally {
-    button.disabled = false;
-  }
-});
-
 async function renderLogins() {
   const tab = await activeTab();
   document.getElementById("site").textContent = tab?.url ? new URL(tab.url).hostname : "";
