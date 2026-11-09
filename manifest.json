@@ -1,0 +1,79 @@
+{
+  "manifest_version": 3,
+  "name": "Open Passwords",
+  "version": "0.54.0",
+  "description": "Fill and save Apple Passwords credentials in Chromium on macOS, with on-demand passkey support.",
+  "key": "MIIBIjANBgkqhkiG9w0BAQEFAAOCAQ8AMIIBCgKCAQEAmhNqBl6l3ExdMfr6OEWkuER89oSb8HWzgspHrJHvNneOF4nFuDEYzw8vA9Wq/kKOSK05qZ57s6WSAsjgDm7Wk3UrOgGzHRuQ1f9R7WFLqeqLNpOIRybGkjLEDBXuCnZq9obqrLh29oxF5GLK5Q1mssUpQy5Bb9Jp3Dp4MTUCpAPLXLNRsV2yH9tblTCCTGyZ3GKnmJuac+eSOe07G9RxOhpevP9+Hi9do9e7fMALuaW2aio3SeZxgphEmOmVEBfgLACMDpLkg17lYL02TB7n/mcGZDt79fNkntZIMYpvBZoJ7+5Hivqezv4zz+hCzmZwqmtlAQnbrKVjchu4MAhNGwIDAQAB",
+  "background": {
+    "service_worker": "src/background.js",
+    "type": "module"
+  },
+  "action": {
+    "default_popup": "src/popup.html",
+    "default_title": "Open Passwords"
+  },
+  "permissions": [
+    "alarms",
+    "storage"
+  ],
+  "optional_permissions": [
+    "nativeMessaging"
+  ],
+  "host_permissions": [
+    "https://*/*",
+    "http://localhost/*",
+    "http://127.0.0.1/*",
+    "http://*.localhost/*",
+    "http://*.test/*"
+  ],
+  "content_scripts": [
+    {
+      "matches": [
+        "https://*/*",
+        "http://localhost/*",
+        "http://127.0.0.1/*",
+        "http://*.localhost/*",
+        "http://*.test/*"
+      ],
+      "js": [
+        "src/content.js"
+      ],
+      "run_at": "document_idle",
+      "all_frames": true
+    },
+    {
+      "matches": [
+        "https://*/*",
+        "http://localhost/*",
+        "http://127.0.0.1/*",
+        "http://*.localhost/*",
+        "http://*.test/*"
+      ],
+      "js": [
+        "src/passkey-bridge.js"
+      ],
+      "run_at": "document_start",
+      "all_frames": false
+    },
+    {
+      "matches": [
+        "https://*/*",
+        "http://localhost/*",
+        "http://127.0.0.1/*",
+        "http://*.localhost/*",
+        "http://*.test/*"
+      ],
+      "js": [
+        "src/passkey-guard.js"
+      ],
+      "run_at": "document_start",
+      "all_frames": false,
+      "world": "MAIN"
+    }
+  ],
+  "icons": {
+    "16": "icons/icon16.png",
+    "48": "icons/icon48.png",
+    "128": "icons/icon128.png"
+  }
+}

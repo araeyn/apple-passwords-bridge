@@ -1,0 +1,81 @@
+<!DOCTYPE html>
+<html lang="en">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <link rel="stylesheet" href="popup.css" />
+    <title>Open Passwords</title>
+  </head>
+  <body>
+    <header>
+      <img src="../icons/icon48.png" alt="" width="20" height="20" />
+      <h1>Open Passwords</h1>
+      <button id="refresh" class="icon" title="Refresh passwords" aria-label="Refresh passwords" hidden><span class="sf-symbol-refresh" aria-hidden="true"></span></button>
+      <span id="dot" class="dot" title="status"></span>
+    </header>
+
+    <main>
+      <!-- No native helper -->
+      <section id="view-nohelper" hidden>
+        <p class="msg">
+          Couldn't reach the Passwords helper. Run
+          native/install-password-helper.sh from this extension's folder, then
+          reload the extension. Chrome and Edge can also use Apple's registered
+          helper directly.
+        </p>
+      </section>
+
+      <!-- Needs PIN -->
+      <section id="view-pin" hidden>
+        <p class="msg">
+          A verification code was generated on your Mac. Enter it to grant access.
+        </p>
+        <input id="pin" inputmode="numeric" autocomplete="one-time-code" maxlength="6" placeholder="••••••" />
+        <button id="verify" class="primary">Unlock</button>
+        <button id="newcode" class="link">Request a new code</button>
+        <p id="pin-error" class="error" hidden></p>
+      </section>
+
+      <!-- Connecting -->
+      <section id="view-connecting" hidden>
+        <p class="msg">Connect to the Passwords helper. The browser will ask before enabling native helper access.</p>
+        <button id="connect-helper" class="primary">Connect to Passwords</button>
+        <p id="connect-error" class="error" hidden></p>
+      </section>
+
+      <!-- Unlocked: logins for current site -->
+      <section id="view-unlocked" hidden>
+        <p id="site" class="site"></p>
+        <ul id="logins" class="logins"></ul>
+        <p id="nologins" class="msg" hidden>No saved passwords for this site.</p>
+        <p id="refresh-note" class="note" hidden></p>
+      </section>
+    </main>
+
+    <!-- Footer: toggles for the browser password manager and passkey autofill -->
+    <footer>
+      <label id="pk-row" class="switch-row">
+        <span>Hide passkey suggestions</span>
+        <input type="checkbox" id="pk-toggle" class="switch" />
+      </label>
+      <label id="pk-helper-row" class="switch-row">
+        <span>Use helper for explicit passkey requests</span>
+        <input type="checkbox" id="pk-helper-toggle" class="switch" />
+      </label>
+      <p class="footer-note">On by default: sign-in or registration opens the selected signed browser on demand. Turn it off to use this browser's native passkey flow.</p>
+      <label class="select-row" for="helper-idle-timeout">
+        <span>Disconnect helper when idle</span>
+        <select id="helper-idle-timeout">
+          <option value="5">5 minutes</option>
+          <option value="10" selected>10 minutes</option>
+          <option value="20">20 minutes</option>
+          <option value="60">1 hour</option>
+          <option value="0">Never</option>
+        </select>
+      </label>
+      <p class="footer-note">Disconnecting clears the unlocked session. The next use may need your Mac verification code.</p>
+    </footer>
+
+    <script type="module" src="popup.js"></script>
+  </body>
+</html>
