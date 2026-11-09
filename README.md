@@ -1,6 +1,6 @@
 # Open Passwords
 
-Use Apple Passwords for website logins and passkeys in Chrome or Arc on macOS. The extension connects to Apple’s native Passwords service through the Open Passwords Helper app.
+Use Apple Passwords for website logins and passkeys in Chrome or Arc on macOS. The extension connects to Apple’s native Passwords service through the Open Passwords Helper app. Passkey support is experimental and hit-or-miss.
 
 ## Requirements
 
@@ -12,7 +12,7 @@ Use Apple Passwords for website logins and passkeys in Chrome or Arc on macOS. T
 
 1. From this folder, run `./native/install-password-helper.sh`.
 2. Open **Open Passwords Helper** from `~/Applications`. Choose a browser and select **Check selected browser**.
-3. In Chrome or Arc, open the extensions page, turn on Developer mode, select **Load unpacked**, and choose this repository’s root folder—the folder containing `manifest.json`.
+3. In an your Chromium browser of choice, open the extensions page, turn on Developer mode, select **Load unpacked**, and choose this repository’s root folder — the folder containing `manifest.json`.
 4. Open the extension and select **Connect to Passwords**. Allow website access when the browser asks; it is needed for automatic autofill.
 
 ## Use
