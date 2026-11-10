@@ -1,0 +1,134 @@
+name: Release
+
+on:
+  push:
+    tags:
+      - "v*.*.*"
+
+permissions:
+  contents: write
+
+jobs:
+  release:
+    runs-on: macos-15
+    steps:
+      - name: Check out tagged source
+        uses: actions/checkout@v7.0.1
+
+      - name: Verify tag and app versions
+        env:
+          RELEASE_TAG: ${{ github.ref_name }}
+        run: |
+          python3 - <<'PY'
+          import json
+          import os
+          import plistlib
+          import re
+          from pathlib import Path
+
+          tag = os.environ["RELEASE_TAG"]
+          if not re.fullmatch(r"v\d+\.\d+\.\d+", tag):
+              raise SystemExit("Release tags must use vMAJOR.MINOR.PATCH, for example v1.0.0")
+
+          version = tag[1:]
+          manifest = json.loads(Path("manifest.json").read_text())
+          with Path("native/Info.plist").open("rb") as source:
+              app = plistlib.load(source)
+          if manifest.get("version") != version:
+              raise SystemExit(f"Tag {tag} does not match manifest version {manifest.get('version')}")
+          if app.get("CFBundleShortVersionString") != version:
+              raise SystemExit(f"Tag {tag} does not match app version {app.get('CFBundleShortVersionString')}")
+          if app.get("CFBundleVersion") != version:
+              raise SystemExit(f"Tag {tag} does not match app build version {app.get('CFBundleVersion')}")
+          PY
+
+      - name: Build universal helper app
+        run: ./native/build.sh
+
+      - name: Verify helper app signature
+        run: codesign --verify --deep --strict "native/build/Open Passwords Helper.app"
+
+      - name: Stage release files
+        run: |
+          mkdir -p dist/extension
+          cp manifest.json dist/extension/
+          cp -R src icons fonts dist/extension/
+          ditto -c -k --sequesterRsrc --keepParent \
+            "native/build/Open Passwords Helper.app" \
+            "dist/Open-Passwords-Helper-macOS.zip"
+          ditto -c -k --sequesterRsrc --keepParent \
+            "dist/extension" \
+            "dist/Open-Passwords-Extension-Unpacked.zip"
+
+      - name: Verify CRX key and pack extension
+        env:
+          CRX_PRIVATE_KEY: ${{ secrets.CRX_PRIVATE_KEY }}
+        run: |
+          if [[ -z "$CRX_PRIVATE_KEY" ]]; then
+            echo "CRX_PRIVATE_KEY is missing from GitHub Actions secrets." >&2
+            exit 1
+          fi
+
+          key="$RUNNER_TEMP/open-passwords-crx.pem"
+          printf '%s\n' "$CRX_PRIVATE_KEY" > "$key"
+          chmod 600 "$key"
+
+          python3 - "$key" <<'PY'
+          import base64
+          import hashlib
+          import json
+          import subprocess
+          import sys
+          from pathlib import Path
+
+          key_path = sys.argv[1]
+          manifest = json.loads(Path("manifest.json").read_text())
+          public_key = subprocess.check_output([
+              "openssl", "pkey", "-in", key_path, "-pubout", "-outform", "DER"
+          ])
+          if base64.b64encode(public_key).decode() != manifest.get("key"):
+              raise SystemExit("CRX_PRIVATE_KEY does not match the public key in manifest.json")
+
+          digest = hashlib.sha256(public_key).digest()[:16]
+          extension_id = "".join(
+              chr(ord("a") + ((digest[index // 2] >> (4 if index % 2 == 0 else 0)) & 0x0f))
+              for index in range(32)
+          )
+          helper_source = Path("native/OpenPasswordsHelper.m").read_text()
+          if f"chrome-extension://{extension_id}/" not in helper_source:
+              raise SystemExit("The helper's native messaging allowlist does not match the CRX extension ID")
+          print(f"Packing extension ID {extension_id}")
+          PY
+
+          chrome="/Applications/Google Chrome.app/Contents/MacOS/Google Chrome"
+          if [[ ! -x "$chrome" ]]; then
+            brew install --cask google-chrome
+          fi
+          "/Applications/Google Chrome.app/Contents/MacOS/Google Chrome" \
+            --pack-extension="$GITHUB_WORKSPACE/dist/extension" \
+            --pack-extension-key="$key"
+          mv dist/extension.crx dist/Open-Passwords-Extension.crx
+
+      - name: Create checksums
+        run: shasum -a 256 dist/Open-Passwords-Helper-macOS.zip dist/Open-Passwords-Extension.crx dist/Open-Passwords-Extension-Unpacked.zip > dist/SHA256SUMS
+
+      - name: Publish stable GitHub Release
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          tag="$GITHUB_REF_NAME"
+          assets=(
+            dist/Open-Passwords-Helper-macOS.zip
+            dist/Open-Passwords-Extension.crx
+            dist/Open-Passwords-Extension-Unpacked.zip
+            dist/SHA256SUMS
+          )
+          if gh release view "$tag" --repo "$GITHUB_REPOSITORY" >/dev/null 2>&1; then
+            gh release upload "$tag" "${assets[@]}" --repo "$GITHUB_REPOSITORY" --clobber
+          else
+            gh release create "$tag" "${assets[@]}" \
+              --repo "$GITHUB_REPOSITORY" \
+              --title "Open Passwords $tag" \
+              --generate-notes \
+              --verify-tag
+          fi

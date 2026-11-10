@@ -1,6 +1,5 @@
-// Owns the on-demand native connection and SRP session. The open native port keeps
-// this worker alive while connected; one-shot timers only expire short-lived data
-// and disconnect the helper after the user's idle limit.
+// Owns the native connection and SRP session. The open native port keeps this
+// worker alive while connected; maintenance timers only expire short-lived data.
 
 import { ApplePasswords, State } from "./protocol.js";
 
@@ -54,7 +53,6 @@ function pickSaveTarget({ host, existing, detected, generated, newPwCtx }) {
 // new-password saves that arrived while locked; a reset can navigate away, so stash and flush on unlock
 const pendingSaves = [];
 const PENDING_SAVE_TTL_MS = 10 * 60_000;
-let pendingSaveFlush = false;
 const pendingSavesReady = (async () => {
   try {
     if (typeof chrome.storage.session?.setAccessLevel === "function") {
@@ -122,7 +120,6 @@ async function flushPendingSaves() {
     return;
   }
   const batch = pendingSaves.splice(0);
-  pendingSaveFlush = true;
   try {
     for (const s of batch) {
       try {
@@ -139,7 +136,6 @@ async function flushPendingSaves() {
       } catch {}
     }
   } finally {
-    pendingSaveFlush = false;
     await persistPendingSaves();
     scheduleMaintenance();
   }
@@ -218,6 +214,9 @@ const MAINTENANCE_ALARM = "open-passwords-maintenance";
 const PASSKEY_DEFAULT_MIGRATION = "passkeyHelperDefaultOnV050";
 chrome.runtime.onInstalled.addListener(() => {
   chrome.alarms.clear(KEEPALIVE_ALARM);
+  chrome.storage.local.remove(["helperIdleMinutes", "hidePasskeys"], () => {
+    void chrome.runtime.lastError;
+  });
   void ensureConnected();
   chrome.storage.local.get({ [PASSKEY_DEFAULT_MIGRATION]: false }, (settings) => {
     if (settings[PASSKEY_DEFAULT_MIGRATION]) return;
@@ -234,26 +233,7 @@ chrome.runtime.onStartup.addListener(() => {
   void ensureConnected();
 });
 
-const DEFAULT_HELPER_IDLE_MINUTES = 10;
-const ALLOWED_HELPER_IDLE_MINUTES = new Set([0, 5, 10, 20, 60]);
-let helperIdleMinutes = DEFAULT_HELPER_IDLE_MINUTES;
-let lastHelperActivityAt = 0;
 let maintenanceTimer = null;
-let activeMessages = 0;
-
-chrome.storage.local.get({ helperIdleMinutes: DEFAULT_HELPER_IDLE_MINUTES }, (values) => {
-  const configured = Number(values.helperIdleMinutes);
-  if (ALLOWED_HELPER_IDLE_MINUTES.has(configured)) helperIdleMinutes = configured;
-  scheduleMaintenance();
-});
-chrome.storage.onChanged.addListener((changes, area) => {
-  if (area !== "local" || !changes.helperIdleMinutes) return;
-  const configured = Number(changes.helperIdleMinutes.newValue);
-  if (ALLOWED_HELPER_IDLE_MINUTES.has(configured)) {
-    helperIdleMinutes = configured;
-    scheduleMaintenance();
-  }
-});
 chrome.storage.onChanged.addListener((changes, area) => {
   if (area !== "local" || !changes.usePasskeyHelper || changes.usePasskeyHelper.newValue === true) return;
   for (const entry of passkeyRequests.values()) {
@@ -271,17 +251,6 @@ function scheduleMaintenance() {
   for (const hit of pwCache.values()) deadlines.push(hit.at + PW_CACHE_TTL_MS);
   for (const save of pendingSaves) deadlines.push(save.queuedAt + PENDING_SAVE_TTL_MS);
 
-  const helperBusy = activeMessages > 0 || pendingSaveFlush || client.hasPendingRequests;
-  if (
-    client.port &&
-    helperIdleMinutes > 0 &&
-    pendingSaves.length === 0 &&
-    !helperBusy &&
-    lastHelperActivityAt > 0
-  ) {
-    deadlines.push(lastHelperActivityAt + helperIdleMinutes * 60_000);
-  }
-
   if (!deadlines.length) {
     chrome.alarms.clear(MAINTENANCE_ALARM);
     return;
@@ -289,7 +258,7 @@ function scheduleMaintenance() {
   const when = Math.max(Date.now() + 1, Math.min(...deadlines));
   maintenanceTimer = setTimeout(runMaintenance, Math.max(1, when - Date.now()));
   // Timers are efficient while the worker is active; a one-shot alarm also
-  // wakes it to expire session-only queued saves or disconnect an idle helper.
+  // wakes it to expire session-only queued saves.
   try {
     const alarm = chrome.alarms.create(MAINTENANCE_ALARM, { when });
     alarm?.catch?.(() => {});
@@ -302,26 +271,6 @@ function runMaintenance() {
   const now = Date.now();
   pwCachePrune(now);
   prunePendingSaves(now);
-
-  const helperBusy = activeMessages > 0 || pendingSaveFlush || client.hasPendingRequests;
-  const idleDeadline = lastHelperActivityAt + helperIdleMinutes * 60_000;
-  if (
-    client.port &&
-    helperIdleMinutes > 0 &&
-    pendingSaves.length === 0 &&
-    !helperBusy &&
-    lastHelperActivityAt > 0 &&
-    now >= idleDeadline
-  ) {
-    lastHelperActivityAt = 0;
-    pwCacheClear();
-    client.disconnect();
-  }
-  scheduleMaintenance();
-}
-
-function noteHelperActivity() {
-  lastHelperActivityAt = Date.now();
   scheduleMaintenance();
 }
 
@@ -331,12 +280,10 @@ function ensureConnected() {
   connectionAttempt = (async () => {
     const allowed = await chrome.permissions.contains({ permissions: ["nativeMessaging"] }).catch(() => false);
     if (!allowed) {
-      lastHelperActivityAt = 0;
       client.disconnect();
       scheduleMaintenance();
       return false;
     }
-    noteHelperActivity();
     if (client.state === State.Disconnected || client.state === State.NoHelper) {
       try {
         await client.connect();
@@ -553,7 +500,6 @@ function cancelPasskeyRequest(msg, sender) {
 }
 
 chrome.runtime.onMessage.addListener((msg, sender, sendResponse) => {
-  activeMessages += 1;
   (async () => {
     try {
       // Content scripts are limited to the explicit allowlist above; all other messages are popup-only.
@@ -832,23 +778,9 @@ chrome.runtime.onMessage.addListener((msg, sender, sendResponse) => {
           break;
 
         case "disconnect":
-          lastHelperActivityAt = 0;
           client.disconnect();
           sendResponse({ ok: true, state: client.state });
           break;
-
-        case "setHelperIdleMinutes": {
-          if (!isFromOwnUi(sender)) return sendResponse({ ok: false, error: "forbidden" });
-          const minutes = Number(msg.minutes);
-          if (!ALLOWED_HELPER_IDLE_MINUTES.has(minutes)) {
-            return sendResponse({ ok: false, error: "unsupported idle timeout" });
-          }
-          helperIdleMinutes = minutes;
-          await chrome.storage.local.set({ helperIdleMinutes: minutes });
-          scheduleMaintenance();
-          sendResponse({ ok: true, minutes });
-          break;
-        }
 
         default:
           sendResponse({ ok: false, error: "unknown message" });
@@ -857,8 +789,6 @@ chrome.runtime.onMessage.addListener((msg, sender, sendResponse) => {
       sendResponse({ ok: false, error: String(e?.message ?? e), state: client.state });
     }
   })().finally(() => {
-    activeMessages = Math.max(0, activeMessages - 1);
-    if (client.port && lastHelperActivityAt > 0) lastHelperActivityAt = Date.now();
     scheduleMaintenance();
   });
   return true; // async response

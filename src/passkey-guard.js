@@ -1,6 +1,5 @@
-// Route WebAuthn requests through the companion helper when enabled, including
-// requests made during page load. The setting can still suppress conditional
-// passkey requests instead of opening the helper browser.
+// Route explicit WebAuthn requests through the companion helper when enabled.
+// Conditional requests keep the browser's native passkey autofill UI.
 (() => {
   const CHANNEL = "openpasswords:passkeys:v1";
   const BINARY_TAG = "__openPasswordsBufferSource";
@@ -18,10 +17,7 @@
     typeof window.PublicKeyCredential?.isConditionalMediationAvailable === "function"
       ? window.PublicKeyCredential.isConditionalMediationAvailable.bind(window.PublicKeyCredential)
       : null;
-  let hideConditionalPasskeys = false;
   let usePasskeyHelper = true;
-  addEventListener("openpasswords:hide-passkeys-on", () => (hideConditionalPasskeys = true));
-  addEventListener("openpasswords:hide-passkeys-off", () => (hideConditionalPasskeys = false));
   addEventListener("openpasswords:helper-passkeys-on", () => (usePasskeyHelper = true));
   addEventListener("openpasswords:helper-passkeys-off", () => (usePasskeyHelper = false));
   dispatchEvent(new Event("openpasswords:passkey-settings-request"));
@@ -324,23 +320,13 @@
     return publicKeyCredential;
   }
 
-  function hideConditionalRequest(options) {
-    return new Promise((_, reject) => {
-      const signal = options?.signal;
-      if (!signal) return;
-      const abort = () => reject(makeError("AbortError", "The operation was aborted."));
-      if (signal.aborted) abort();
-      else signal.addEventListener("abort", abort, { once: true });
-    });
-  }
-
   function wrap(kind, original) {
     return function (options) {
       const publicKey = options && options.publicKey;
       if (!publicKey) return original(options);
 
       const conditional = kind === "get" && options.mediation === "conditional";
-      if (conditional && hideConditionalPasskeys) return hideConditionalRequest(options);
+      if (conditional) return original(options);
       if (!usePasskeyHelper) return original(options);
       return requestHelper(kind, options);
     };

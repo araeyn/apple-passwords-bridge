@@ -1,9 +1,9 @@
 {
   "manifest_version": 3,
   "name": "Open Passwords",
-  "version": "0.56.0",
+  "version": "1.0.0",
   "description": "Fill and save Apple Passwords credentials in Chromium on macOS, with on-demand passkey support.",
-  "key": "MIIBIjANBgkqhkiG9w0BAQEFAAOCAQ8AMIIBCgKCAQEAmhNqBl6l3ExdMfr6OEWkuER89oSb8HWzgspHrJHvNneOF4nFuDEYzw8vA9Wq/kKOSK05qZ57s6WSAsjgDm7Wk3UrOgGzHRuQ1f9R7WFLqeqLNpOIRybGkjLEDBXuCnZq9obqrLh29oxF5GLK5Q1mssUpQy5Bb9Jp3Dp4MTUCpAPLXLNRsV2yH9tblTCCTGyZ3GKnmJuac+eSOe07G9RxOhpevP9+Hi9do9e7fMALuaW2aio3SeZxgphEmOmVEBfgLACMDpLkg17lYL02TB7n/mcGZDt79fNkntZIMYpvBZoJ7+5Hivqezv4zz+hCzmZwqmtlAQnbrKVjchu4MAhNGwIDAQAB",
+  "key": "MIIBIjANBgkqhkiG9w0BAQEFAAOCAQ8AMIIBCgKCAQEAuMc4VIIO4EP7GhCs8Qvfm2DfX4vmrkj9p5OXN4RfnKlOjzrs0Bdz8unOi++VuaAEvDiiOT8zyovHYsRTp9eDriVCWduN2jHLl3VJ/EpxLGGH7CmrGPev0QxNDHTbhUbxZ5GiyGuyGalmhMX8pA/ymLTQoS/8LxwsDVzVdLdiB1zMYu1vhv5gs8RWl+4vCpZIQOr81j3E7SIGY1XqvbLXTt9OYFoGnoBdUetIaNVCuPUrSCsPG+dSlroL8HXk27nP2z0M8AqHoShPDuKJTzFw2JrNr0zv+6ocpWcngcqJIXpytwL025NBdYdKOjqfFAfWNB81w2PXHlN3jMdVLqh6TQIDAQAB",
   "background": {
     "service_worker": "src/background.js",
     "type": "module"

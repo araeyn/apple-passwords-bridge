@@ -13,24 +13,13 @@ function show(name) {
   for (const [k, el] of Object.entries(views)) el.hidden = k !== name;
 }
 
-// Conditional suggestions stay in the page's browser. Explicit create/get
-// requests use the helper by default and can be switched back here.
-const pkToggle = document.getElementById("pk-toggle");
+// Explicit passkey requests use the helper by default.
 const pkHelperToggle = document.getElementById("pk-helper-toggle");
-const helperIdleTimeout = document.getElementById("helper-idle-timeout");
-chrome.storage?.local?.get({ hidePasskeys: false, usePasskeyHelper: true, helperIdleMinutes: 10 }, (d) => {
-  pkToggle.checked = !!d.hidePasskeys;
+chrome.storage?.local?.get({ usePasskeyHelper: true }, (d) => {
   pkHelperToggle.checked = !!d.usePasskeyHelper;
-  helperIdleTimeout.value = String(d.helperIdleMinutes);
-});
-pkToggle.addEventListener("change", () => {
-  chrome.storage?.local?.set({ hidePasskeys: pkToggle.checked });
 });
 pkHelperToggle.addEventListener("change", () => {
   chrome.storage?.local?.set({ usePasskeyHelper: pkHelperToggle.checked });
-});
-helperIdleTimeout.addEventListener("change", () => {
-  chrome.storage?.local?.set({ helperIdleMinutes: Number(helperIdleTimeout.value) });
 });
 
 function setDot(state) {

@@ -7,7 +7,7 @@ RESOURCES="$APP/Contents/Resources"
 /usr/bin/swift "$NATIVE_DIR/generate-icons.swift"
 mkdir -p "$APP/Contents/MacOS" "$RESOURCES"
 
-/usr/bin/clang -fobjc-arc -O2 -Wall -Wextra -mmacosx-version-min=13.0 \
+/usr/bin/clang -arch arm64 -arch x86_64 -fobjc-arc -O2 -Wall -Wextra -mmacosx-version-min=13.0 \
   -framework AppKit -framework CoreGraphics -framework Security \
   "$NATIVE_DIR/OpenPasswordsHelper.m" \
   "$NATIVE_DIR/PasskeyHost.m" \

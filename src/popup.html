@@ -50,28 +50,13 @@
       </section>
     </main>
 
-    <!-- Footer: toggles for the browser password manager and passkey autofill -->
+    <!-- Footer: passkey routing -->
     <footer>
-      <label id="pk-row" class="switch-row">
-        <span>Hide passkey suggestions</span>
-        <input type="checkbox" id="pk-toggle" class="switch" />
-      </label>
       <label id="pk-helper-row" class="switch-row">
         <span>Use helper for passkey requests</span>
         <input type="checkbox" id="pk-helper-toggle" class="switch" />
       </label>
-      <p class="footer-note">On by default: passkey requests, including requests made when a page loads, open the selected signed browser. Turn it off to use this browser's native passkey flow.</p>
-      <label class="select-row" for="helper-idle-timeout">
-        <span>Disconnect helper when idle</span>
-        <select id="helper-idle-timeout">
-          <option value="5">5 minutes</option>
-          <option value="10" selected>10 minutes</option>
-          <option value="20">20 minutes</option>
-          <option value="60">1 hour</option>
-          <option value="0">Never</option>
-        </select>
-      </label>
-      <p class="footer-note">Disconnecting clears the unlocked session. The next use may need your Mac verification code.</p>
+      <p class="footer-note">Routes explicit requests through the selected browser.</p>
     </footer>
 
     <script type="module" src="popup.js"></script>

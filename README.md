@@ -1,45 +1,46 @@
 # Open Passwords
 
-Use Apple Passwords for website logins and passkeys in any browser on macOS. The extension connects to Apple’s native Passwords service through the Open Passwords Helper app.
+Use Apple Passwords for website logins and passkeys in Ardia and other Chromium browsers on macOS.
 
-Passkey support is experimental and may not work on every site.
-
-## Requirements
-
-- macOS 13 or later, with Apple Passwords set up.
-- Chrome or Arc.
-- A signed Chromium browser with Apple’s public-key credential entitlement, selected in the helper.
+<p align="center">
+  <a href="https://github.com/araeyn/apple-passwords-bridge/releases/latest/download/Open-Passwords-Extension.crx"><img alt="Download extension" src="https://img.shields.io/badge/Download-Extension%20(CRX)-1677ff?style=for-the-badge"></a>
+  <a href="https://github.com/araeyn/apple-passwords-bridge/releases/latest/download/Open-Passwords-Helper-macOS.zip"><img alt="Download helper app" src="https://img.shields.io/badge/Download-Helper%20for%20macOS-333333?style=for-the-badge"></a>
+</p>
 
 ## Install
 
-1. From this folder, run `./native/install-password-helper.sh`.
-2. Open **Open Passwords Helper** from `~/Applications`. Choose a browser and select **Check selected browser**.
-3. In Chrome or Arc, open the extensions page, turn on Developer mode, select **Load unpacked**, and choose this repository’s root folder—the folder containing `manifest.json`.
-4. Allow the extension's native messaging permission if the browser asks during installation or reload. The extension connects automatically; there is no Connect button. Allow website access when asked so autofill can work.
+You need macOS 13 or later and Apple Passwords set up.
 
-macOS may ask the selected browser to access saved passkeys the first time. Choose **Allow** to use Apple Passwords passkeys; this permission is separate from the helper's.
+1. Download and unzip **Open Passwords Helper**. Move the app to **Applications** and open it. Click **Install Helper**, choose your browser, then click **Check selected browser**.
+2. Download the **Extension**. Open your browser’s extensions page, turn on **Developer mode**, and drag the `.crx` file onto the page.
+3. Pin **Open Passwords** to the browser toolbar. Allow native messaging and website access if asked.
+
+Updating from an older unpacked install? Remove the old extension first, then install the release CRX.
+
+If your browser will not accept the CRX, [download the unpacked extension](https://github.com/araeyn/apple-passwords-bridge/releases/latest/download/Open-Passwords-Extension-Unpacked.zip), unzip it, and choose **Load unpacked** on the extensions page.
 
 ## Use
 
-- Choose an account from the extension popup or a field suggestion to fill a login.
-- New or changed passwords can be saved to Apple Passwords after form submission.
-- Passkey requests, including requests made when a page loads, use the helper by default. Turn off **Use helper for passkey requests** to use the browser showing the site.
-- Turn on **Hide passkey suggestions** to suppress conditional passkey requests.
+- Choose a saved login from the extension popup or a field suggestion. Submitted new or changed passwords can be saved to Apple Passwords.
+- Explicit passkey requests open in the selected browser by default. Turn off **Use helper for passkey requests** to use the current browser’s passkey flow. Conditional suggestions use the browser’s native UI.
+- The helper stays connected while idle and reconnects when the browser starts.
 
-## Privacy
+Credentials stay on your Mac. The helper does not keep a separate vault; decrypted passwords are held in memory for up to two minutes.
 
-The extension needs access to supported websites to detect login fields and autofill. Its native messaging permission lets it connect to the installed helper automatically. macOS separately controls whether passkeys are available to the browser. Passwords are handled locally through Apple’s helper; this app does not read Keychain databases or maintain a password vault. Decrypted passwords are cached in memory for up to two minutes.
+## macOS prompts
 
-## Known Issues
+The helper is ad hoc signed and is not notarized. If macOS blocks the first launch, Control-click the app in Finder, choose **Open**, then confirm. macOS may also show folder-access or app-management prompts when the helper starts the selected browser; review each prompt before approving it.
 
-- When using Arc, the helper may ask for access to certain directories.
-- Warning that the helper is trying to modify another application.
+To ad hoc sign the app from Terminal:
 
-## Troubleshooting and removal
+```sh
+APP="$HOME/Applications/Open Passwords Helper.app"
+codesign --force --deep --sign - "$APP"
+codesign --verify --deep --strict "$APP"
+```
 
-- If the extension cannot connect, run `./native/install-password-helper.sh` again, then reload the extension.
-- After reloading the extension, refresh any open website tabs before retrying passkeys.
-- If the browser check fails, choose another browser with Apple’s public-key credential entitlement.
-- To remove the helper and its browser registrations, use **Remove Helper** in the app. Remove the extension from the browser’s extensions page.
+Ad hoc signing does not notarize the app or remove macOS prompts.
 
-For helper build details and additional troubleshooting, see [native/README.md](native/README.md).
+## Remove
+
+Choose **Remove Helper** in the app, then remove **Open Passwords** from your browser. For source builds and release details, see [native/README.md](native/README.md).

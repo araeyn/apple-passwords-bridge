@@ -18,8 +18,9 @@ extern char **environ;
 static NSString *const kBundleID = @"com.openpasswords.helper";
 static NSString *const kHostName = @"com.openpasswords.icloud";
 static NSString *const kPasskeyHostName = @"com.openpasswords.passkeys";
-static NSString *const kExtensionOrigin = @"chrome-extension://abpahgnajbkclfhpodhjhlmgfjhpibaa/";
-static NSString *const kPreviousExtensionOrigin = @"chrome-extension://pejdijmoenmkgeppbflobdenhhabjlaj/";
+static NSString *const kExtensionOrigin = @"chrome-extension://iaojbcjndjmmblmoemilknlnjijokkfg/";
+static NSString *const kPreviousExtensionOrigin = @"chrome-extension://abpahgnajbkclfhpodhjhlmgfjhpibaa/";
+static NSString *const kLegacyExtensionOrigin = @"chrome-extension://pejdijmoenmkgeppbflobdenhhabjlaj/";
 static NSString *const kHandoffVariable = @"OPENPASSWORDS_HELPER_HANDOFF";
 static NSString *const kBrowserEntitlement = @"com.apple.developer.web-browser.public-key-credential";
 static NSString *const kSelectedBrowserPreference = @"SelectedBrowserAppPath";
@@ -33,7 +34,7 @@ static const NSTimeInterval kProbeTimeout = 25.0;
 static NSString *gLaunchDirectory;
 
 static NSArray<NSString *> *extensionOrigins(void) {
-    return @[ kExtensionOrigin, kPreviousExtensionOrigin ];
+    return @[ kExtensionOrigin, kPreviousExtensionOrigin, kLegacyExtensionOrigin ];
 }
 
 static BOOL isAllowedExtensionOrigin(NSString *origin) {

@@ -1,0 +1,44 @@
+name: CI
+
+on:
+  pull_request:
+    branches: [main]
+  push:
+    branches: [main]
+
+permissions:
+  contents: read
+
+jobs:
+  build:
+    runs-on: macos-15
+    steps:
+      - name: Check out source
+        uses: actions/checkout@v7.0.1
+
+      - name: Validate extension and app versions
+        run: |
+          python3 - <<'PY'
+          import json
+          import plistlib
+          from pathlib import Path
+
+          manifest = json.loads(Path("manifest.json").read_text())
+          with Path("native/Info.plist").open("rb") as source:
+              app = plistlib.load(source)
+
+          if manifest.get("manifest_version") != 3:
+              raise SystemExit("Expected a Manifest V3 extension")
+          if manifest.get("version") != app.get("CFBundleShortVersionString"):
+              raise SystemExit("manifest.json and native/Info.plist versions must match")
+          if manifest.get("version") != app.get("CFBundleVersion"):
+              raise SystemExit("manifest.json and native/Info.plist build versions must match")
+          if not manifest.get("key"):
+              raise SystemExit("manifest.json must keep the CRX public key")
+          PY
+
+      - name: Build universal helper app
+        run: ./native/build.sh
+
+      - name: Verify helper app signature
+        run: codesign --verify --deep --strict "native/build/Open Passwords Helper.app"

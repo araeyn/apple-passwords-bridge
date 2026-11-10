@@ -1,8 +1,8 @@
-# Open Passwords Helper
+# Helper and releases
 
-The macOS app connects the extension to Apple’s native Passwords helper. It does not read Keychain databases or keep a separate password vault.
+For regular installation, use the downloads and steps in the [main README](../README.md).
 
-## Install or update
+## Build from source
 
 From the repository root, run:
 
@@ -10,22 +10,21 @@ From the repository root, run:
 ./native/install-password-helper.sh
 ```
 
-This builds **Open Passwords Helper.app**, installs it in `~/Applications`, and registers the native hosts for Chrome and Arc. Open the helper, choose a browser, then select **Check selected browser**. Load the extension from the repository root as described in the [main README](../README.md), and allow its native messaging permission if prompted. The extension connects automatically. macOS may separately ask the selected browser to access saved passkeys the first time one is used.
+This builds a universal macOS app, ad hoc signs it, installs it in `~/Applications`, and registers the native messaging hosts. The app supports macOS 13 and later.
 
-## Build without installing
+To build without installing, run `./native/build.sh`. The app is not notarized; macOS may ask you to approve its first launch.
 
-From this directory, run:
+## Publish a release
 
-```sh
-./build.sh
-```
+Update the matching versions in `manifest.json` and `native/Info.plist`, then push a version tag such as `v1.0.0`. GitHub Actions builds the helper app, CRX, unpacked extension ZIP, and checksums, then attaches them to a stable GitHub Release.
+
+The CRX signing key is stored as the GitHub Actions secret `CRX_PRIVATE_KEY`. Keep the private PEM out of the repository. The public key in `manifest.json` determines the extension ID and must continue to match the private key.
 
 ## Troubleshooting
 
-- If the extension cannot connect, rerun the installer and reload the extension.
-- If the browser check fails, choose another signed Chromium browser with Apple’s public-key credential entitlement.
-- Passkey requests use a temporary browser profile, including requests initiated automatically when a site loads.
+- If the extension cannot reach the helper, open the helper app and click **Install Helper**, then reload the extension and refresh the page.
+- If browser compatibility fails, choose another signed Chromium browser with Apple’s public-key credential entitlement.
+- If a passkey request fails, turn off **Use helper for passkey requests** to use the current browser’s normal flow.
+- macOS may show folder-access or app-management prompts when the selected browser starts. The helper does not modify browser apps and cannot suppress these prompts.
 
-## Remove
-
-Choose **Remove Helper** in the app to unregister the native hosts and remove `~/Applications/Open Passwords Helper.app`. To unregister the hosts but keep the app, run `./unregister-password-helper.sh` from this directory.
+To remove the app and browser registrations, choose **Remove Helper** in the app. To unregister just the browser hosts, run `./native/unregister-password-helper.sh`.
