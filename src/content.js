@@ -101,6 +101,7 @@ function pageHasVisiblePassword(field) {
 // unambiguous "this box takes your account identifier" markers
 const STRONG_IDENTITY_NAMES = new Set([
   "email", "emailAddress", "signInId", "loginId", "userId", "username", "userName", "loginName", "account", "passkey",
+  "identifiant", "courriel", "benutzername", "usuario", "utente", "gebruikersnaam",
   "账号", "帐号", "账户", "登录账号", "登录名", "用户名", "邮箱", "手机号", "工号",
 ]);
 
@@ -113,17 +114,21 @@ function hasStrongIdentitySignal(el) {
   return normalizedIdentityNames(el).some((name) => STRONG_IDENTITY_NAMES.has(name));
 }
 
-const LOGINISH = /log[\s_-]?in|sign[\s_-]?in|auth|session|sso|oauth|account|idp|passport/i;
+const LOGINISH =
+  /log[\s_-]?in|sign[\s_-]?in|auth|session|sso|oauth|account|idp|passport|connexion|identifi|anmeld|einlogg|espace|compte|konto|cuenta|inicio[\s_-]?sesion/i;
+
+// a login step's submit label, including the common non-english ones (continuer, weiter, ...)
+const LOGIN_ACTION =
+  /\b(sign[\s-]?in|log[\s-]?in|continue|next|continuer|suivant|connexion|(?:se|me)[\s-]connecter|s['’]identifier|acc[eé]der|valider|weiter|anmelden|einloggen|siguiente|continuar|entrar|iniciar[\s-]sesi[oó]n|acceder|accedi|avanti|prosegui|volgende|doorgaan|inloggen|aanmelden|pr[oó]ximo)\b/i;
 
 // the page or form reads like a login flow. gates the two-step case (email now, password on
 // the next screen) where no password field exists yet
-function loginishContext(el) {
+function loginishContext(el, scope = el.form || document) {
   if (LOGINISH.test(location.hostname + location.pathname)) return true;
   const form = el.form;
   if (form && LOGINISH.test(form.getAttribute("action") || "")) return true;
-  const scope = form || document;
-  return Array.from(scope.querySelectorAll("button, input[type=submit]")).some((b) =>
-    /\b(sign[\s-]?in|log[\s-]?in|continue|next)\b/i.test(b.textContent || b.value || ""),
+  return Array.from(scope.querySelectorAll("button, input[type=submit], input[type=button], [role=button]")).some((b) =>
+    LOGIN_ACTION.test(b.textContent || b.value || ""),
   );
 }
 
@@ -226,7 +231,9 @@ function fillCredentials(username, password, anchor) {
   // if the anchor itself is a username field, fill IT not some other form's
   let userTarget = null;
   if (username) {
-    if (anchor && isUsernameField(anchor)) userTarget = anchor;
+    if (anchor && isFillable(anchor) && (isUsernameField(anchor) || isIdentifierFallbackField(anchor))) {
+      userTarget = anchor;
+    }
     else if (usernames.length) {
       userTarget = usernames[0];
       if (firstPw) {
@@ -271,6 +278,7 @@ chrome.runtime.onMessage.addListener((msg, sender, sendResponse) => {
   const filled = fillCredentials(msg.username, msg.password, liveField(fillAnchor));
   // remember briefly so unchanged autofills do not trigger a redundant save prompt
   if (filled) {
+    removeSuggestion();
     const record = { host: location.hostname, username: msg.username, password: msg.password, at: Date.now() };
     lastAutofill = record;
     setTimeout(() => {
@@ -296,6 +304,11 @@ let suggestionBox = null;
 let anchorField = null;
 let navItems = []; // selectable dropdown rows: [{ el, onActivate }]
 let navIndex = -1;
+// the user moved the selection (arrows or hover) since the menu opened
+let navExplicit = false;
+// token of an inline fill still waiting on touch id / the helper
+let fillPending = 0;
+let fillSeq = 0;
 const MAX_SUGGESTION_HEIGHT = 230;
 
 function isLoginField(el) {
@@ -330,6 +343,41 @@ function isLoginField(el) {
   return false;
 }
 
+const TEXTLIKE_TYPES = ["text", "email", "tel", "number", ""];
+
+// the form, or for formless SPAs the nearest ancestor holding the step's button
+function loginStepScope(el) {
+  if (el.form) return el.form;
+  let node = el.parentElement;
+  for (let depth = 0; node && node !== document.body && depth < 8; depth++, node = node.parentElement) {
+    if (node.querySelector('button, input[type=submit], input[type=button], [role="button"]')) return node;
+  }
+  return null;
+}
+
+// identifier boxes the name heuristics cant recognize: card/member/customer numbers, labels in
+// other languages (e.g. navigo "Mon n° Navigo"). weak signal, so the offer only shows when the
+// site has saved logins and never shows the locked-vault row
+function isIdentifierFallbackField(el) {
+  if (!(el instanceof HTMLInputElement) || !isVisible(el)) return false;
+  if (isPasswordField(el) || isOtpField(el) || isSearchOrComboField(el)) return false;
+  if (!TEXTLIKE_TYPES.includes((el.type || "text").toLowerCase())) return false;
+  if (NONLOGIN_HINT.test(attrBlob(el))) return false;
+  const scope = loginStepScope(el);
+  if (!scope) return false;
+  // a sign-in step is short; more boxes means signup, checkout or a profile form
+  const boxes = Array.from(scope.querySelectorAll("input")).filter(
+    (i) => TEXTLIKE_TYPES.includes((i.type || "text").toLowerCase()) && isVisible(i),
+  );
+  if (boxes.length > 3) return false;
+  if (Array.from(scope.querySelectorAll("textarea")).some(isVisible)) return false;
+  return loginishContext(el, scope);
+}
+
+function isOfferField(el) {
+  return isLoginField(el) || isIdentifierFallbackField(el);
+}
+
 function removeSuggestion() {
   if (suggestionEl) {
     suggestionEl.remove();
@@ -339,6 +387,7 @@ function removeSuggestion() {
   anchorField = null;
   navItems = [];
   navIndex = -1;
+  navExplicit = false;
 }
 
 // highlight active row, keep it in view
@@ -380,14 +429,22 @@ function onSuggestionKeydown(e) {
   if (!navItems.length || target !== anchorField) return;
   if (e.key === "ArrowDown") {
     setActiveNav((navIndex + 1) % navItems.length);
+    navExplicit = true;
     e.preventDefault();
   } else if (e.key === "ArrowUp") {
     setActiveNav((navIndex - 1 + navItems.length) % navItems.length);
+    navExplicit = true;
     e.preventDefault();
-  } else if (e.key === "Enter" && navIndex >= 0) {
-    e.preventDefault();
-    e.stopPropagation();
-    navItems[navIndex].onActivate();
+  } else if (e.key === "Enter") {
+    // the preselected first row only claims Enter on an empty field. once the field has a value
+    // (typed, prefilled by the site, or just filled by us) Enter belongs to the page's submit
+    if (navIndex >= 0 && (navExplicit || !anchorField.value)) {
+      e.preventDefault();
+      e.stopPropagation();
+      navItems[navIndex].onActivate();
+    } else {
+      removeSuggestion();
+    }
   }
 }
 
@@ -399,7 +456,10 @@ function onSuggestionMouseMove(e) {
     const r = el.getBoundingClientRect();
     return e.clientX >= r.left && e.clientX <= r.right && e.clientY >= r.top && e.clientY <= r.bottom;
   });
-  if (idx >= 0 && idx !== navIndex) setActiveNav(idx, false);
+  if (idx >= 0 && idx !== navIndex) {
+    setActiveNav(idx, false);
+    navExplicit = true;
+  }
 }
 
 // re-position under the anchor on build and on scroll/resize so the dropdown follows
@@ -619,7 +679,16 @@ function appendLoginRows(box, field, logins) {
     registerRow(row, () => {
       removeSuggestion();
       fillAnchor = field;
-      chrome.runtime.sendMessage({ type: "inlineFill", loginName: login });
+      // touch id takes focus from the window and hands it back before the password arrives;
+      // re-offering on that focus left a preselected menu that ate the next Enter
+      const token = ++fillSeq;
+      fillPending = token;
+      chrome.runtime
+        .sendMessage({ type: "inlineFill", loginName: login })
+        .catch(() => {})
+        .finally(() => {
+          if (fillPending === token) fillPending = 0;
+        });
     });
     box.appendChild(row);
   }
@@ -673,7 +742,7 @@ let offerSeq = 0;
 // saved accounts first (listing names is free, no Touch ID), then generator options on a
 // new-password field. locked vault shows an unlock row. fetches BEFORE building the box so an
 // empty result never flashes a box on then off - nothing shows unless theres something to show
-async function buildOfferSuggestion(field) {
+async function buildOfferSuggestion(field, weak = false) {
   const hasGenerator = isNewPasswordField(field);
   const seq = ++offerSeq;
 
@@ -684,8 +753,8 @@ async function buildOfferSuggestion(field) {
     res = null;
   }
   // a newer focus superseded this, or the field lost focus while we awaited
-  if (seq !== offerSeq || field !== deepActiveElement()) return;
-  if (!res?.ok) {
+  if (seq !== offerSeq || field !== deepActiveElement() || fillPending) return;
+  if (!res?.ok || (weak && res.locked)) {
     if (anchorField === field) removeSuggestion();
     return;
   }
@@ -774,9 +843,10 @@ async function onFocusIn(e) {
   const field = (e.composedPath ? e.composedPath()[0] : null) || e.target;
   // remember password fields before any show-password toggle flips them to text
   if (field instanceof HTMLInputElement && field.type === "password") everPassword.add(field);
-  if (!(field instanceof HTMLInputElement) || !isLoginField(field)) {
-    return;
-  }
+  if (fillPending) return;
+  if (!(field instanceof HTMLInputElement)) return;
+  const strong = isLoginField(field);
+  if (!strong && !isIdentifierFallbackField(field)) return;
   if (!isSupportedCredentialPage()) return;
   if (!frameIsSafe()) return; // skip unrelated cross-origin iframes
   // still offer on a site/browser pre-filled login field (apple/chrome do); only stay quiet if WE just filled it
@@ -793,7 +863,7 @@ async function onFocusIn(e) {
     }
   }
   // request only usernames for this frame's origin; passwords are fetched after a trusted selection
-  buildOfferSuggestion(field);
+  buildOfferSuggestion(field, !strong);
 }
 
 function offerForCurrentFocus() {
@@ -834,7 +904,7 @@ document.addEventListener(
     if (e.target === anchorField) return;
     // clicking ANOTHER login field: dont close here, its own focusin rebuilds the offer.
     // closing now (mousedown before focusin) would race and leave it with no dropdown
-    if (e.target instanceof HTMLInputElement && isLoginField(e.target)) return;
+    if (e.target instanceof HTMLInputElement && isOfferField(e.target)) return;
     removeSuggestion();
   },
   true,
